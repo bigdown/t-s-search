@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 分级别异步文件日志输出配置 -->
+<!-- 级别从高到低 OFF 、 FATAL 、 ERROR 、 WARN 、 INFO 、 DEBUG 、 TRACE 、 ALL -->
+<!-- 日志输出规则 根据当前ROOT 级别，日志输出时，级别高于root默认的级别时 会输出 -->
+<!-- 以下 每个配置的 filter 是过滤掉输出文件里面，会出现高级别文件，依然出现低级别的日志信息，通过filter 过滤只记录本级别的日志 -->
+<!-- scan 当此属性设置为true时，配置文件如果发生改变，将会被重新加载，默认值为true。 -->
+<!-- scanPeriod 设置监测配置文件是否有修改的时间间隔，如果没有给出时间单位，默认单位是毫秒。当scan为true时，此属性生效。默认的时间间隔为1分钟。 -->
+<!-- debug 当此属性设置为true时，将打印出logback内部日志信息，实时查看logback运行状态。默认值为false。 -->
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+
+	<property resource="application.yml" />
+	<springProperty scope="context" name="logPath" source="logback.path" />
+	<springProperty scope="context" name="appName" source="logback.name" />
+
+	<!-- 最大保存时间(天) -->
+	<property name="maxHistory" value="3" />
+
+	<!-- 异步缓冲队列的深度,该值会影响性能.默认值为256 -->
+	<property name="queueSize" value="256"></property>
+
+	<!-- lOGGER PATTERN 根据个人喜好选择匹配 -->
+	<property name="logPattern" value="[%X{traceId}] %d{yyyy-MM-dd HH:mm:ss}:%5p %c{1}:%L - %m%n"></property>
+
+	<!-- 控制台的标准输出 -->
+	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<charset>UTF-8</charset>
+			<pattern>${logPattern}</pattern>
+		</encoder>
+	</appender>
+
+	<!-- sql 日志记录 -->
+	<appender name="SQL_LOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<filter class="ch.qos.logback.classic.filter.LevelFilter">
+			<level>DEBUG</level>
+			<onMatch>ACCEPT</onMatch>
+			<onMismatch>DENY</onMismatch>
+		</filter>
+		<file>${logPath}/mysql.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<fileNamePattern>${logPath}/debug/${appName}_debug.log.%d{yyyy-MM-dd}.zip
+			</fileNamePattern>
+			<maxHistory>${maxHistory}</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>${logPattern}</pattern>
+		</encoder>
+	</appender>
+
+	<!-- 通用日志打印 -->
+	<appender name="COMMON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${logPath}/${appName}.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<fileNamePattern>${logPath}/info/${appName}_info.log.%d{yyyy-MM-dd}.zip
+			</fileNamePattern>
+			<maxHistory>${maxHistory}</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>${logPattern}</pattern>
+		</encoder>
+	</appender>
+
+	<!-- ASYNC_LOG -->
+	<appender name="ASYNC_LOG" class="ch.qos.logback.classic.AsyncAppender">
+		<!-- 不丢失日志.默认的,如果队列的80%已满,则会丢弃TRACT、DEBUG、INFO级别的日志 -->
+		<discardingThreshold>0</discardingThreshold>
+		<!-- 更改默认的队列的深度,该值会影响性能.默认值为256 -->
+		<queueSize>${queueSize}</queueSize>
+		<appender-ref ref="COMMON" />
+	</appender>
+	
+	<!-- ASYNC_SQL_LOG -->
+	<appender name="ASYNC_SQL_LOG" class="ch.qos.logback.classic.AsyncAppender">
+		<!-- 不丢失日志.默认的,如果队列的80%已满,则会丢弃TRACT、DEBUG、INFO级别的日志 -->
+		<discardingThreshold>0</discardingThreshold>
+		<!-- 更改默认的队列的深度,该值会影响性能.默认值为256 -->
+		<queueSize>${queueSize}</queueSize>
+		<appender-ref ref="SQL_LOG" />
+	</appender>
+
+	<!-- logstash日志收集 -->
+	<appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+		<destination>localhost:4567</destination>
+		<!-- 日志输出编码 -->
+		<!--<encoder charset="UTF-8" class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">-->
+	   <encoder charset="UTF-8" class="net.logstash.logback.encoder.LogstashEncoder">
+	           <providers>
+	               <timestamp>
+	                   <timeZone>UTC</timeZone>
+	               </timestamp>
+	          </providers>
+	       </encoder>
+	</appender>
+	
+	<!-- 日志的记录级别 -->
+	<!-- 在定义后引用APPENDER -->
+	<root level="INFO">
+		<!-- 控制台 -->
+		<appender-ref ref="STDOUT" />
+		<!-- 具体的日志级别和文件的配置 -->
+		<appender-ref ref="ASYNC_LOG" />
+		<appender-ref ref="LOGSTASH" />
+	</root>
+	
+	<logger name="com.t.s.mapper" additivity="false" level="DEBUG">
+		<appender-ref ref="ASYNC_SQL_LOG" />
+	</logger>
+	<logger name="com.t.s" additivity="false" level="DEBUG">
+		<appender-ref ref="ASYNC_LOG" />
+		<appender-ref ref="LOGSTASH" />
+	</logger>
+</configuration>
